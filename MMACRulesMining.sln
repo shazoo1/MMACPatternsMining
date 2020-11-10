@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29519.181
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MMACRulesMining", "MMACRulesMining\MMACRulesMining.csproj", "{0B4C7A48-2C72-4C9E-B993-1980F0B2D1A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MMACRulesMining.Desktop", "MMACRulesMining.Desktop\MMACRulesMining.Desktop.csproj", "{F197B02F-293D-44B3-8849-AAFB8D86DFCD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0B4C7A48-2C72-4C9E-B993-1980F0B2D1A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B4C7A48-2C72-4C9E-B993-1980F0B2D1A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B4C7A48-2C72-4C9E-B993-1980F0B2D1A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B4C7A48-2C72-4C9E-B993-1980F0B2D1A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F197B02F-293D-44B3-8849-AAFB8D86DFCD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F197B02F-293D-44B3-8849-AAFB8D86DFCD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F197B02F-293D-44B3-8849-AAFB8D86DFCD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F197B02F-293D-44B3-8849-AAFB8D86DFCD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CB660783-3679-4701-86CB-71411A85791F}
+	EndGlobalSection
+EndGlobal
