@@ -1,10 +1,13 @@
 ﻿using MapControl;
+using MMACRulesMining.Data;
 using MMACRulesMining.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Windows.Media;
 
 namespace MMACRulesMining.Desktop.ViewModels
@@ -12,13 +15,17 @@ namespace MMACRulesMining.Desktop.ViewModels
 	public class PolygonViewModel : BaseViewModel
 	{
 
+		private static GlonassContext _context;
+		public delegate void OnClicked(PolygonViewModel sender);
+		public event OnClicked Clicked;
+
+		private Thread _dataLoadingThread;
+
 		public PolygonViewModel() : base()
 		{
 			_locations = new ObservableCollection<Location>();
+			Attributes = new List<AttributeViewModel>();
 		}
-
-		public delegate void OnClicked(PolygonViewModel sender);
-		public event OnClicked Clicked;
 
 		#region Bindables
 
@@ -108,10 +115,56 @@ namespace MMACRulesMining.Desktop.ViewModels
 			set
 			{
 				_records = value;
+
+				Attributes = new List<AttributeViewModel>();
+
+				foreach(DataColumn col in _records.Columns)
+				{
+					if (!Attributes.Any(x => x.AttributeName == col.ColumnName))
+					{
+						IEnumerable<string> possibleValues = _records.AsEnumerable()
+							.Select(x => x[col].ToString())
+							.Distinct();
+						
+						// If there are more than 10 distinct values in column, this column is more likely numeric.
+						bool isCategorical = possibleValues.Count() <= 10;
+						string badValue = "";
+
+						if (isCategorical)
+						{
+							badValue = possibleValues.Contains("False") ? "False" : possibleValues.FirstOrDefault();
+						}
+
+						Attributes.Add(new AttributeViewModel
+						{
+							AttributeName = col.ColumnName,
+							IsAntecedent = false,
+							IsSelected = isCategorical,
+							PossibleValues = isCategorical ? possibleValues : null,
+							BadValue = badValue,
+							IsEligibleForMining = isCategorical
+						});
+					}
+				}
+
 				OnPropertyChanged(nameof(Records));
 				OnPropertyChanged(nameof(Total));
+				OnPropertyChanged(nameof(Attributes));
 			}
 		}
+
+		private bool _isLoading;
+		public bool IsLoading
+		{
+			get => _isLoading;
+			set
+			{
+				_isLoading = value;
+				OnPropertyChanged(nameof(IsLoading));
+			}
+		}
+
+		public List<AttributeViewModel> Attributes { get; set; }
 		#endregion
 
 		#region Commands
@@ -149,5 +202,78 @@ namespace MMACRulesMining.Desktop.ViewModels
 				return sqlPol;
 			}
 		}
+
+		public void LoadData(string latColumn = "latitude", string lonColumn = "longitude") 
+		{
+			if (_context != null)
+			{
+				
+				_dataLoadingThread = new Thread(() =>
+				{
+					IsLoading = true;
+					if (_context.SelectWithinPolygon(SqlPolygon, latColumn, lonColumn, out DataTable tab))
+					{
+						Records = tab;
+					}
+					IsLoading = false;
+				});
+
+				_dataLoadingThread.Start();
+			}
+		}
+
+		public static void SetContext(GlonassContext context)
+		{
+			_context = context;
+		}
+
+		public void DropSelection()
+		{
+			Records?.Dispose();
+			_dataLoadingThread?.Interrupt();
+		}
+	}
+
+	public class AttributeViewModel : BaseViewModel
+	{
+		public string AttributeName { get; set; }
+
+		private bool _isSelected;
+		public bool IsSelected 
+		{ 
+			get => _isSelected;
+			set
+			{
+				_isSelected = value;
+				OnPropertyChanged(nameof(IsSelected));
+			}
+		}
+
+		private bool _isAntecedent;
+		public bool IsAntecedent
+		{
+			get => _isAntecedent;
+			set
+			{
+				_isAntecedent = value;
+				OnPropertyChanged(nameof(IsAntecedent));
+			}
+		}
+
+		public IEnumerable<string> PossibleValues { get; set; }
+
+		private string _badValue;
+		public string BadValue 
+		{ 
+			get => _badValue;
+			set 
+			{
+				_badValue = value;
+				OnPropertyChanged(nameof(BadValue));
+			} 
+		}
+
+		public bool IsEligibleForMining { get; set; }
+
 	}
 }

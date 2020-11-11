@@ -58,6 +58,8 @@ namespace MMACRulesMining.Desktop.ViewModels
 			_fsHelper = new FSHelper();
 			_context = new GlonassContext();
 
+			PolygonViewModel.SetContext(_context);
+
 			Polygons = new ObservableCollection<PolygonViewModel>();
 			
 			foreach(PolygonViewModel polygon in PolygonsImporter.ImportDirectory(@"E:\Data\polygons"))
@@ -166,6 +168,24 @@ namespace MMACRulesMining.Desktop.ViewModels
 
 		public void MineRulesForPolygon(PolygonViewModel polygon, string tableName)
 		{
+			var miner = new Miner();
+			var filtered = dataset.AsEnumerable().Where(x => double.Parse(x.Field<string>("latitude")) >= tile.Bottom
+														&& double.Parse(x.Field<string>("latitude")) <= tile.Top
+														&& double.Parse(x.Field<string>("longitude")) >= tile.Left
+														&& double.Parse(x.Field<string>("longitude")) <= tile.Right);
+			var testFiltered = filtered.AsEnumerable();
+			var geoTile = filtered.Any() ? filtered.CopyToDataTable() : dataset.Clone();
+
+			var rules = miner.MineRules(geoTile, @"E:\Data\attributes.csv", @"E:\Data\unused_consequents.csv",
+				0.001, 0.01, @"E:\Data\results");
+
+			tile.TotalElements = filtered.Count();
+			tile.Rules = rules;
+
+			_fsHelper.SaveObject<Tile>(tile, string.Format(@"E:\Data\results\tiles\rules\{0}x{1}_rules", tile.GridLon, tile.GridLat));
+			if (!System.IO.Directory.Exists(rulesPath + @"\text"))
+				System.IO.Directory.CreateDirectory(rulesPath + @"\text");
+			System.IO.File.WriteAllLines(string.Format(@"E:\Data\results\tiles\rules\text\{0}x{1}_rules.txt", tile.GridLon, tile.GridLat), rules.Select(x => x.ToString()));
 			//Dataset = _context.
 		}
 
@@ -186,9 +206,7 @@ namespace MMACRulesMining.Desktop.ViewModels
 				}
 			};
 			
-
 			//NewPolygonLayer.Children.Add(polygon);
-
 		}
 
 		private void OnPolygonSelected(PolygonViewModel polygon)
@@ -199,16 +217,12 @@ namespace MMACRulesMining.Desktop.ViewModels
 				{
 					SelectedPolygon.IsSelected = false;
 					// Dispose table to prevent memory leaks.
-					SelectedPolygon.Records.Dispose();
+					SelectedPolygon.DropSelection();
 				}
 				SelectedPolygon = polygon;
-				if (_context.SelectWithinPolygon(polygon.SqlPolygon, "latitude", "longitude", out DataTable tab))
-				{
-					SelectedPolygon.Records = tab;
-				}
+				SelectedPolygon.LoadData();
 			}
 		}
-
 	}
 
 	[Serializable]
