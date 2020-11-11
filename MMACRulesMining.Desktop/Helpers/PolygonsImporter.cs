@@ -60,10 +60,7 @@ namespace MMACRulesMining.Desktop.Helpers
 
 				if (pair.Length == 2)
 				{
-					if (pair[0].ToLower() == "name")
-					{
-						return (pair[0], pair[1]);
-					}
+					return (pair[0], pair[1]);
 				}
 
 				return null;
@@ -94,9 +91,16 @@ namespace MMACRulesMining.Desktop.Helpers
 						else 
 						{
 							var keyValue = ReadAttributeFromLine(line);
-							if (keyValue.HasValue && keyValue.Value.attributeKey.ToLower() == "name")
+							if (keyValue.HasValue)
 							{
-								polygonVM.Title = keyValue.Value.attributeValue;
+								if (keyValue.Value.attributeKey.ToLower() == "name")
+								{
+									polygonVM.Title = keyValue.Value.attributeValue;
+								}
+								else if (keyValue.Value.attributeKey.ToLower() == "alias")
+								{
+									polygonVM.Alias = keyValue.Value.attributeValue;
+								}
 							}
 						}
 					}

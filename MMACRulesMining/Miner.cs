@@ -34,13 +34,13 @@ namespace MMACRulesMining
 			return dataset;
 		}
 
-		public Rule[] MineRules(DataTable dataset, string attributesPath, string antecedentPath, double minSupport, double minConfidence,
-			string localPath)
+		public Rule[] MineRules(DataTable dataset, string attributesPath, string consequentsPath,
+			string localPath, double minSupport = 0.001, double minConfidence = 0.01)
 		{
 
 			_logger.PrintMilestone("Reading attributes.");
-			var antecedents = _fsHelper.LoadUnusedConsequents(antecedentPath);
-			var attributes = _fsHelper.GetAttributesList(attributesPath, antecedentPath);
+			var antecedents = _fsHelper.LoadUnusedConsequents(consequentsPath);
+			var attributes = _fsHelper.GetAttributesList(attributesPath, consequentsPath);
 
 			System.IO.Directory.CreateDirectory(localPath + "\\itemsets");
 
@@ -109,8 +109,87 @@ namespace MMACRulesMining
 			}
 			_logger.PrintMilestone(string.Format("Ended rules generation. Total: {0} rules.", Rules.Count()));
 			var ordered = Rules.OrderByDescending(x => x.confidence).ToArray();
-			System.IO.File.WriteAllLines(string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}_lines.txt", MinSupport, MinConfidence), ordered.Select(x => x.ToString()));
-			_fsHelper.SaveObject<List<Rule>>(ordered.ToList(), string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}.rules", MinSupport, MinConfidence));
+			System.IO.File.WriteAllLines(string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}_lines.txt", minSupport, minConfidence), ordered.Select(x => x.ToString()));
+			_fsHelper.SaveObject<List<Rule>>(ordered.ToList(), string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}.rules", minSupport, minConfidence));
+			return ordered;
+
+		}
+
+		public Rule[] MineRules(DataTable dataset, IEnumerable<Attribute> attributes,
+			string localPath, double minSupport = 0.001, double minConfidence = 0.01)
+		{
+
+			_logger.PrintMilestone("Reading attributes.");
+
+			System.IO.Directory.CreateDirectory(localPath + "\\itemsets");
+
+			foreach (DataRow tRow in dataset.Rows)
+			{
+				foreach (var att in attributes)
+				{
+					att.Add(tRow[att.Name].ToString(), tRow["id"].ToString());
+				}
+			}
+			_logger.PrintExecutionTime("Attributes read.");
+			Attribute.TotalElements = dataset.Rows.Count;
+
+			_logger.PrintMilestone("Starting to combine attributes...");
+			_logger.BeginLap();
+
+
+			/// <summary>
+			/// Stores last itemset to itemsets collection, moves current to last and clears current.
+			/// </summary>
+			void SubmitItemset()
+			{
+				itemsets.AddRange(lastTierItemsets);
+				lastTierItemsets = currentTierItemsets;
+				currentTierItemsets = new List<Itemset>();
+			}
+
+			// Get initial, 2-tier itemsets to build the rest on them.
+			CombineAttributesAndValues(attributes.ToArray(), 0, attributes.Count() - 1, 0, 2);
+			_logger.PrintLap(string.Format("Generated {0}-tier itemsets ({1} entries).", 2, currentTierItemsets.Count));
+			SubmitItemset();
+			_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", 2));
+			int lastItemsetTier = 2;
+
+			for (int i = 3; i < attributes.Count(); i++)
+			{
+				foreach (Itemset itemset in lastTierItemsets)
+				{
+					CombineAttributeWithItemset(itemset, attributes.ToArray());
+				}
+				SubmitItemset();
+				if (lastTierItemsets.Count > 0)
+				{
+					_logger.PrintLap(string.Format("Generated {0}-tier itemsets ({1} entries).", i, lastTierItemsets.Count));
+					_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", i));
+				}
+				else
+				{
+					lastItemsetTier = i - 1;
+					_logger.PrintMilestone(string.Format("No itemsets found for Tier {0}. No further itemsets will be generated.", i));
+					break;
+				}
+			}
+			_logger.PrintExecutionTime(string.Format("Generated itemsets, {0} entries total.", itemsets.Count));
+
+			_logger.PrintMilestone("Starting rules generation...");
+			_logger.BeginLap();
+			for (var i = 2; i <= lastItemsetTier; i++)
+			{
+				var tier = _fsHelper.LoadItemsets(string.Format("{0}\\itemsets\\tier{1}", localPath, i)).OrderBy(x => x.Support).ToArray();
+				foreach (Itemset itemset in tier)
+				{
+					BuildRules(itemset);
+				}
+				_logger.PrintLap(string.Format("Generated {0}-tier rules.", i));
+			}
+			_logger.PrintMilestone(string.Format("Ended rules generation. Total: {0} rules.", Rules.Count()));
+			var ordered = Rules.OrderByDescending(x => x.confidence).ToArray();
+			//System.IO.File.WriteAllLines(string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}_lines.txt", minSupport, minConfidence), ordered.Select(x => x.ToString()));
+			//_fsHelper.SaveObject<List<Rule>>(ordered.ToList(), string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}.rules", minSupport, minConfidence));
 			return ordered;
 
 		}

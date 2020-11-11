@@ -16,7 +16,7 @@ namespace MMACRulesMining.Desktop.ViewModels
 	{
 		GlonassContext _context;
 
-		string rulesPath = @"E:\Data\results\tiles\rules";
+		string rulesPath = @"E:\Data\results\polygons\rules";
 
 		(double lat, double lon) se = (55.6363888888889, 49.3325);
 		(double lat, double lon) sw = (55.6363888888889, 48.8361111111111);
@@ -43,6 +43,8 @@ namespace MMACRulesMining.Desktop.ViewModels
 			}
 		}
 
+		public ActionCommand MineCommand { get; private set; }
+
 		public MapTileLayer MapLayer
 		{
 			get => new MapTileLayer
@@ -57,6 +59,12 @@ namespace MMACRulesMining.Desktop.ViewModels
 		{
 			_fsHelper = new FSHelper();
 			_context = new GlonassContext();
+
+			MineCommand = new ActionCommand(
+				c => MineRulesForPolygon(SelectedPolygon, "Dataset_Kazan_filtered"),
+				c => SelectedPolygon != null && !SelectedPolygon.IsLoading 
+					&& SelectedPolygon.Records != null
+			);
 
 			PolygonViewModel.SetContext(_context);
 
@@ -155,7 +163,7 @@ namespace MMACRulesMining.Desktop.ViewModels
 			var geoTile = filtered.Any() ? filtered.CopyToDataTable() : dataset.Clone();
 
 			var rules = miner.MineRules(geoTile, @"E:\Data\attributes.csv", @"E:\Data\unused_consequents.csv",
-				0.001, 0.01, @"E:\Data\results");
+				@"E:\Data\results", 0.001, 0.01);
 
 			tile.TotalElements = filtered.Count();
 			tile.Rules = rules;
@@ -168,25 +176,25 @@ namespace MMACRulesMining.Desktop.ViewModels
 
 		public void MineRulesForPolygon(PolygonViewModel polygon, string tableName)
 		{
-			var miner = new Miner();
-			var filtered = dataset.AsEnumerable().Where(x => double.Parse(x.Field<string>("latitude")) >= tile.Bottom
-														&& double.Parse(x.Field<string>("latitude")) <= tile.Top
-														&& double.Parse(x.Field<string>("longitude")) >= tile.Left
-														&& double.Parse(x.Field<string>("longitude")) <= tile.Right);
-			var testFiltered = filtered.AsEnumerable();
-			var geoTile = filtered.Any() ? filtered.CopyToDataTable() : dataset.Clone();
+			Miner miner = new Miner();
+			IEnumerable<Attribute> attributes = MapAttributes(polygon.Attributes
+				.Where(x => x.IsEligibleForMining));
 
-			var rules = miner.MineRules(geoTile, @"E:\Data\attributes.csv", @"E:\Data\unused_consequents.csv",
-				0.001, 0.01, @"E:\Data\results");
+			Rule[] rules = miner.MineRules(polygon.Records, attributes,
+				string.Format(@"E:\Data\results\{0}", polygon.Alias), 0.001, 0.01);
 
-			tile.TotalElements = filtered.Count();
-			tile.Rules = rules;
+			System.IO.File.WriteAllLines(string.Format(@"E:\Data\results\{0}\{0}_rules.txt", polygon.Alias), rules.Select(x => x.ToString()));
+			
+		}
 
-			_fsHelper.SaveObject<Tile>(tile, string.Format(@"E:\Data\results\tiles\rules\{0}x{1}_rules", tile.GridLon, tile.GridLat));
-			if (!System.IO.Directory.Exists(rulesPath + @"\text"))
-				System.IO.Directory.CreateDirectory(rulesPath + @"\text");
-			System.IO.File.WriteAllLines(string.Format(@"E:\Data\results\tiles\rules\text\{0}x{1}_rules.txt", tile.GridLon, tile.GridLat), rules.Select(x => x.ToString()));
-			//Dataset = _context.
+		private IEnumerable<Attribute> MapAttributes(IEnumerable<AttributeViewModel> attributeVMs)
+		{
+			List<Attribute> attributes = new List<Attribute>();
+			foreach(var vm in attributeVMs)
+			{
+				attributes.Add(new Attribute(vm.AttributeName, vm.BadValue, attributes.Count, vm.IsConsequent));
+			}
+			return attributes;
 		}
 
 		PolygonViewModel GetPolygonForTile(Tile tile)

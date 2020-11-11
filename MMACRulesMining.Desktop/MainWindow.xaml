@@ -79,8 +79,7 @@
 
 		<Grid x:Name="controlPanel"
 				  Grid.Column="2"
-				  Margin="5 10 5 10"
-				  DataContext="{Binding SelectedPolygon}">
+				  Margin="5 10 5 10">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
@@ -92,7 +91,7 @@
 				<Style TargetType="{x:Type Grid}">
 					<Setter Property="Visibility" Value="Visible" />
 					<Style.Triggers>
-						<DataTrigger Binding="{Binding}" Value="{x:Null}">
+						<DataTrigger Binding="{Binding SelectedPolygon}" Value="{x:Null}">
 							<Setter Property="Visibility" Value="Collapsed" />
 						</DataTrigger>
 					</Style.Triggers>
@@ -103,18 +102,18 @@
 						   FontSize="20"
 						   FontWeight="Bold"
 						   TextWrapping="Wrap"
-						   Text="{Binding Title, FallbackValue=???}" />
+						   Text="{Binding SelectedPolygon.Title, FallbackValue=???}" />
 
 			<Separator Grid.Row="1"
 						   Margin="3 5 3 5"/>
 
 			<TextBlock Grid.Row="2">
 					<Run Text="Total records:" />
-					<Run Text="{Binding Total, Mode=OneWay, FallbackValue=0}" />
+					<Run Text="{Binding SelectedPolygon.Total, Mode=OneWay, FallbackValue=0}" />
 			</TextBlock>
 
 			<DataGrid Grid.Row="3"
-					  ItemsSource="{Binding Attributes}"
+					  ItemsSource="{Binding SelectedPolygon.Attributes}"
 					  AutoGenerateColumns="False"
 					  HorizontalScrollBarVisibility="Auto"
 					  VerticalScrollBarVisibility="Auto"
@@ -140,12 +139,12 @@
 						</DataGridTemplateColumn.CellTemplate>
 					</DataGridTemplateColumn>
 					
-					<DataGridTemplateColumn Header="Antecedent">
+					<DataGridTemplateColumn Header="Consequent">
 						<DataGridTemplateColumn.CellTemplate>
 							<DataTemplate>
 								<CheckBox HorizontalAlignment="Center"
 										  VerticalAlignment="Center"
-										  IsChecked="{Binding Path=IsAntecedent, UpdateSourceTrigger=PropertyChanged}" />
+										  IsChecked="{Binding Path=IsConsequent, UpdateSourceTrigger=PropertyChanged}" />
 							</DataTemplate>
 						</DataGridTemplateColumn.CellTemplate>
 					</DataGridTemplateColumn>
@@ -167,12 +166,13 @@
 			<Control Grid.Row="3"
 					 Panel.ZIndex="2"
 					 Style="{StaticResource BusyAnimationStyle}"
-					 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+					 Visibility="{Binding SelectedPolygon.IsLoading, Converter={StaticResource BoolToVisibility}}" />
 
 
 			<Button Grid.Row="4"
 					HorizontalAlignment="Center"
 					Style="{StaticResource CommandButtonStyle}"	
+					Content="Mine"
 					Command="{Binding MineCommand}" />
 		</Grid>
 	</Grid>

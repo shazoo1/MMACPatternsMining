@@ -138,7 +138,7 @@ namespace MMACRulesMining.Desktop.ViewModels
 						Attributes.Add(new AttributeViewModel
 						{
 							AttributeName = col.ColumnName,
-							IsAntecedent = false,
+							IsConsequent = false,
 							IsSelected = isCategorical,
 							PossibleValues = isCategorical ? possibleValues : null,
 							BadValue = badValue,
@@ -165,6 +165,9 @@ namespace MMACRulesMining.Desktop.ViewModels
 		}
 
 		public List<AttributeViewModel> Attributes { get; set; }
+
+		public string Alias { get; set; }
+
 		#endregion
 
 		#region Commands
@@ -250,13 +253,13 @@ namespace MMACRulesMining.Desktop.ViewModels
 		}
 
 		private bool _isAntecedent;
-		public bool IsAntecedent
+		public bool IsConsequent
 		{
 			get => _isAntecedent;
 			set
 			{
 				_isAntecedent = value;
-				OnPropertyChanged(nameof(IsAntecedent));
+				OnPropertyChanged(nameof(IsConsequent));
 			}
 		}
 
