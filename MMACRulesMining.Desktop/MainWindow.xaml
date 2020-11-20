@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:MMACRulesMining.Desktop"
         xmlns:map="clr-namespace:MapControl;assembly=MapControl.WPF"
 		xmlns:i="clr-namespace:System.Windows.Interactivity;assembly=System.Windows.Interactivity"
+		xmlns:helpers="clr-namespace:MMACRulesMining.Desktop.Helpers"
 		mc:Ignorable="d"
 		FontSize="14"
         Title="MainWindow" Height="450" Width="800">
@@ -54,37 +55,58 @@
 					</map:MapPolygon.Style>
 				</map:MapPolygon>
 			</DataTemplate>
+
+			<map:LocationCollection x:Key="TestLocs">
+				<map:Location Latitude="55.8212000" Longitude="49.1836774" />
+				<map:Location Latitude="56.8212000" Longitude="50.1836774" />
+				<map:Location Latitude="56.8212000" Longitude="49.1836774" />
+				<map:Location Latitude="55.8212000" Longitude="50.1836774" />
+			</map:LocationCollection>
+			
 			<BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 		</ResourceDictionary>
 	</Window.Resources>
     <Grid>
 		<Grid.ColumnDefinitions>
 			<ColumnDefinition />
+			<ColumnDefinition />
+			<ColumnDefinition />
 			<ColumnDefinition Width="5" />
 			<ColumnDefinition Width="Auto"/>
 		</Grid.ColumnDefinitions>
 		<map:Map x:Name="map"
-				 Grid.Column="0"
+				 Grid.Column="0" Grid.ColumnSpan="3"
 				 MapLayer="{Binding MapLayer}"
 				 MapProjection="{StaticResource WebMercatorProjection}"
 				 Center="{Binding CenterPoint}"
-				 ZoomLevel="11" >
+				 ZoomLevel="13" >
 			
 			<!-- Polygons -->
 			<map:MapItemsControl ItemsSource="{Binding Polygons}"
 								 ItemTemplate="{StaticResource PolygonItemTemplate}" />
+			<!--<map:MapItemsControl >
+				<map:MapPolygon Locations="{StaticResource TestLocs}" Fill="Azure" Stroke="AliceBlue" StrokeThickness="2"/>
+			</map:MapItemsControl>-->
 		</map:Map>
 
-		<GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+		<Button Grid.Column="1"
+				Margin="0 5 0 0"
+				HorizontalAlignment="Center"
+				VerticalAlignment="Top"
+				Command="{Binding RefreshCommand}"
+				Content="Refresh" />
+
+		<GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" />
 
 		<Grid x:Name="controlPanel"
-				  Grid.Column="2"
+				  Grid.Column="4"
 				  Margin="5 10 5 10">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition />
+				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
 			</Grid.RowDefinitions>
 			<Grid.Style>
@@ -165,15 +187,60 @@
 
 			<Control Grid.Row="3"
 					 Panel.ZIndex="2"
-					 Style="{StaticResource BusyAnimationStyle}"
-					 Visibility="{Binding SelectedPolygon.IsLoading, Converter={StaticResource BoolToVisibility}}" />
+					 Visibility="{Binding SelectedPolygon.IsLoading, Converter={StaticResource BoolToVisibility}}" >
+				<Control.Style>
+					<Style TargetType="{x:Type Control}" BasedOn="{StaticResource BusyAnimationStyle}">
+						<Setter Property="Visibility" Value="Collapsed" />
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding SelectedPolygon.IsLoading}" Value="True">
+								<Setter Property="Visibility" Value="Visible" />
+							</DataTrigger>
+							<DataTrigger Binding="{Binding IsMining}" Value="True">
+								<Setter Property="Visibility" Value="Visible" />
+							</DataTrigger>
+						</Style.Triggers>
+						
+					</Style>
+				</Control.Style>
+			</Control>
 
+			<UniformGrid Columns="2" Grid.Row="4"
+						 HorizontalAlignment="Center">
+				<StackPanel Orientation="Vertical"
+							HorizontalAlignment="Center">
+					<TextBlock Text="Min. support" />
+					<TextBox x:Name="tbx_MinSupport">
+						<TextBox.Text>
+							<Binding Path="MinSupport" UpdateSourceTrigger="PropertyChanged">
+								<Binding.ValidationRules>
+									<helpers:DoubleRangeRule Min="0" Max="1" Positive="True" />
+								</Binding.ValidationRules>
+							</Binding>
+						</TextBox.Text>
+					</TextBox>
+				</StackPanel>
+				<StackPanel Orientation="Vertical"
+							HorizontalAlignment="Center">
+					<TextBlock Text="Min. confidence" />
+					<TextBox x:Name="tbx_MinConfidence">
+						<TextBox.Text>
+							<Binding Path="MinConfidence" UpdateSourceTrigger="PropertyChanged">
+								<Binding.ValidationRules>
+									<helpers:DoubleRangeRule Max="1" Positive="True" />
+								</Binding.ValidationRules>
+							</Binding>
+						</TextBox.Text>
+					</TextBox>
+				</StackPanel>
+			</UniformGrid>
 
-			<Button Grid.Row="4"
+			<Button Grid.Row="5"
 					HorizontalAlignment="Center"
-					Style="{StaticResource CommandButtonStyle}"	
 					Content="Mine"
-					Command="{Binding MineCommand}" />
+					Style="{StaticResource CommandButtonStyle}"
+					Command="{Binding MineCommand}"
+					IsEnabled="{Binding CanMine}">
+			</Button>
 		</Grid>
 	</Grid>
 </Window>

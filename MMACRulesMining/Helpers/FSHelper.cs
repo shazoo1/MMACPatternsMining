@@ -53,9 +53,12 @@ namespace MMACRulesMining.Helpers
 		/// </summary>
 		/// <param name="itemsets"></param>
 		/// <param name="path"></param>
-		public void SaveItemsets(List<Itemset> itemsets, string path)
+		/// <param name="useCache">Defines, if method should preserve old itemsets</param>
+		public void SaveItemsets(List<Itemset> itemsets, string path, bool useCache = true)
 		{
 			BinaryFormatter binFormatter = new BinaryFormatter();
+			if (!useCache && System.IO.File.Exists(path))
+				System.IO.File.Delete(path);
 			var fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write);
 
 			binFormatter.Serialize(fs, itemsets);

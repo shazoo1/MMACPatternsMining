@@ -18,53 +18,20 @@ namespace MMACRulesMining.Mappings
 	/// <summary>
 	/// Maps weather to defined features.
 	/// </summary>
-	public class WeatherMapper
+	public class WeatherMapper : BaseWeatherMapper
 	{
-		DataTable featured = new DataTable("fweather");
-		List<string> features = new List<string>();
-		Dictionary<string, string> termsDictionary = new Dictionary<string, string>();
-		GlonassContext _context;
-		FSHelper _fsHelper;
 
-		public WeatherMapper(GlonassContext context)
+		public WeatherMapper(GlonassContext context) : base(context)
 		{
-			_context = context;
-			_fsHelper = new FSHelper();
-			featured.Columns.Add("DateTime", typeof(DateTime));
-			FillDictionary();
+			
 		}
 
-		private void FillDictionary()
+		protected override void FillDictionary() 
 		{
-			// Weather events
-			termsDictionary.Add("Морось.", "drizzle");
-			termsDictionary.Add("Облака покрывали половину неба или менее в течение всего соответствующего периода.", "clouds_below_fifty");
-			termsDictionary.Add("Облака покрывали более половины неба в течение одной части соответствующего периода и половину или менее в течение другой части периода.", "clouds_volatile");
-			termsDictionary.Add("Метель", "snowstorm");
-			termsDictionary.Add("Туман или ледяной туман или сильная мгла.", "fog");
-			termsDictionary.Add("Дождь.", "rain");
-			termsDictionary.Add("Явление, связанное с переносом ветром твердых частиц, видимость пониженная.", "wind_dust");
-			termsDictionary.Add("Гроза (грозы) с осадками или без них.", "thunderstorm");
-			termsDictionary.Add("Дождь со снегом или другими видами твердых осадков", "rain_snow");
-			termsDictionary.Add("Буря", "hailstorm");
-			termsDictionary.Add("Ливень (ливни).", "shower");
-			termsDictionary.Add("Облака покрывали более половины неба в течение всего соответствующего периода.", "clouds_over_fifty");
-			termsDictionary.Add("Снег и/или другие виды твердых осадков", "snow");
-
-			// Groud surface
-			termsDictionary.Add("Слежавшийся или мокрый снег (со льдом или без него), покрывающий по крайней мере половину поверхности почвы, но почва не покрыта полностью.", "surface_snow_wet_over_fifty");
-			termsDictionary.Add("Cухая (без трещин, заметного количества пыли или сыпучего песка)", "surface_dry");
-			termsDictionary.Add("Ровный слой слежавшегося или мокрого снега покрывает поверхность почвы полностью.", "surface_snow_wet_hundred");
-			termsDictionary.Add("Слежавшийся или мокрый снег (со льдом или без него), покрывающий менее половины поверхности почвы.", "surface_snow_wet_below_fifty");
-			termsDictionary.Add("Поверхность почвы влажная.", "surface_wet");
-			termsDictionary.Add("Тонкий слой несвязанной сухой пыли или песка покрывает почву полностью.", "surface_dust_hundred");
-			termsDictionary.Add("Ровный слой сухого рассыпчатого снега покрывает поверхность почвы полностью.", "surface_snow_dry_hundred");
-			termsDictionary.Add("Поверхность почвы замерзшая.", "surface_frozen");
-			termsDictionary.Add("Поверхность почвы сырая (вода застаивается на поверхности и образует малые или большие лужи).", "surface_wet_puddles");
-
+			base.FillDictionary();
 		}
 
-		public void GetFeatures(GlonassContext context, string path = null)
+		public override void GetFeatures(GlonassContext context, string path = null)
 		{
 			var weather = context.Wfilled.OrderBy(x => x.Datetime).ToArray();
 
@@ -115,7 +82,7 @@ namespace MMACRulesMining.Mappings
 			}
 		}
 
-		private void ProcessWindow(List<Wfilled> window)
+		protected override void ProcessWindow(List<Wfilled> window)
 		{
 			List<string> todayFeatures = new List<string>();
 			string feature;
@@ -138,20 +105,20 @@ namespace MMACRulesMining.Mappings
 				if ((feature = ProcessWindGusts(entry, ref features)) != null)
 					currentFeatures.Add(feature);
 
-				// Leave every-3-hours feature as is
+				// Translate features and leave as is.
 				if ((feature = entry.Event1) != null)
 				{
-					feature = ProcessAsIs(feature, ref features);
+					feature = ProcessFeature(feature, ref features);
 					currentFeatures.Add(feature);
 				}
 				if ((feature = entry.Event2) != null)
 				{
-					feature = ProcessAsIs(feature, ref features);
+					feature = ProcessFeature(feature, ref features);
 					currentFeatures.Add(feature);
 				}
 				if ((feature = entry.Surface) != null)
 				{
-					feature = ProcessAsIs(feature, ref features);
+					feature = ProcessFeature(feature, ref features);
 					currentFeatures.Add(feature);
 				}
 
@@ -254,7 +221,7 @@ namespace MMACRulesMining.Mappings
 		{
 			float snowDepth = window.Sum(x =>
 			{
-				if (float.TryParse(x.Snowdepth, out float dep))
+				if (float.TryParse(x.Snowdepth, NumberStyles.Any, CultureInfo.InvariantCulture, out float dep))
 					return dep;
 				return 0;
 			});
@@ -388,27 +355,6 @@ namespace MMACRulesMining.Mappings
 				}
 			}
 			return null;
-		}
-
-		private string ProcessAsIs(string term, ref List<string> features)
-		{
-			if (termsDictionary.TryGetValue(term, out string translation))
-				term = translation; 
-
-            if (!features.Contains(term))
-            {
-                var col = new DataColumn(term, typeof(string)) { DefaultValue = "False" };
-                featured.Columns.Add(col);
-                features.Add(term);
-            }
-			return term;
-        }
-
-		public void SaveColumnsAsAttributes(string tableName, string pathToAttributes)
-		{
-			var attributesList = _context.GetTableColumnNames(tableName);
-			//_fsHelper.SaveObject()
-
 		}
 	}
 }

@@ -4,6 +4,7 @@ using MMACRulesMining.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -41,14 +42,18 @@ namespace MMACRulesMining.Desktop.Helpers
 
 		public static bool ReadPolygonFromFile(string filePath, out PolygonViewModel polygon)
 		{
+			#region Line reading methods
 
 			(double longitute, double latitude)? ReadPointFromLine(string line)
 			{
 				// Split line into parts and trim both
 				string[] point = line.Split(',').Select(x => x.Trim(' ')).ToArray();
 
-				if (point.Length == 2 && double.TryParse(point[0], out double longitude) &&
-					double.TryParse(point[1], out double latitude))
+				if (point.Length == 2 && 
+					double.TryParse(point[0], System.Globalization.NumberStyles.Any,
+						CultureInfo.InvariantCulture, out double longitude) &&
+					double.TryParse(point[1], System.Globalization.NumberStyles.Any,
+						CultureInfo.InvariantCulture, out double latitude))
 					return (longitude, latitude);
 
 				return null;
@@ -65,6 +70,8 @@ namespace MMACRulesMining.Desktop.Helpers
 
 				return null;
 			}
+
+			#endregion
 
 			string[] textPolygon = _fSHelper.ReadLines(filePath);
 

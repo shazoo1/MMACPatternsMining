@@ -151,7 +151,7 @@ namespace MMACRulesMining
 			CombineAttributesAndValues(attributes.ToArray(), 0, attributes.Count() - 1, 0, 2);
 			_logger.PrintLap(string.Format("Generated {0}-tier itemsets ({1} entries).", 2, currentTierItemsets.Count));
 			SubmitItemset();
-			_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", 2));
+			_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", 2), false);
 			int lastItemsetTier = 2;
 
 			for (int i = 3; i < attributes.Count(); i++)
@@ -164,7 +164,7 @@ namespace MMACRulesMining
 				if (lastTierItemsets.Count > 0)
 				{
 					_logger.PrintLap(string.Format("Generated {0}-tier itemsets ({1} entries).", i, lastTierItemsets.Count));
-					_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", i));
+					_fsHelper.SaveItemsets(lastTierItemsets, string.Format(localPath + "\\itemsets\\tier{0}", i), false);
 				}
 				else
 				{
@@ -177,19 +177,22 @@ namespace MMACRulesMining
 
 			_logger.PrintMilestone("Starting rules generation...");
 			_logger.BeginLap();
+
+			Rules = new List<Rule>();
+
 			for (var i = 2; i <= lastItemsetTier; i++)
 			{
 				var tier = _fsHelper.LoadItemsets(string.Format("{0}\\itemsets\\tier{1}", localPath, i)).OrderBy(x => x.Support).ToArray();
 				foreach (Itemset itemset in tier)
 				{
+					if (itemset.GetItems().Any(x => x.attribute.Name == "Первая помощь"))
+					{; }
 					BuildRules(itemset);
 				}
 				_logger.PrintLap(string.Format("Generated {0}-tier rules.", i));
 			}
 			_logger.PrintMilestone(string.Format("Ended rules generation. Total: {0} rules.", Rules.Count()));
 			var ordered = Rules.OrderByDescending(x => x.confidence).ToArray();
-			//System.IO.File.WriteAllLines(string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}_lines.txt", minSupport, minConfidence), ordered.Select(x => x.ToString()));
-			//_fsHelper.SaveObject<List<Rule>>(ordered.ToList(), string.Format(localPath + "\\rules\\minsupp{0}_minConf{1}.rules", minSupport, minConfidence));
 			return ordered;
 
 		}

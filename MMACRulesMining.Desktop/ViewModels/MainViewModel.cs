@@ -7,8 +7,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace MMACRulesMining.Desktop.ViewModels
 {
@@ -26,10 +28,11 @@ namespace MMACRulesMining.Desktop.ViewModels
 		(double lat, double lon) cc = (0, 0);
 
 		private FSHelper _fsHelper;
+		private Miner _miner;
 
-		public List<Tile> Tiles { get; set; }
 		public DataTable Dataset;
 
+		#region Bindings
 		public ObservableCollection<PolygonViewModel> Polygons { get; set; }
 
 		private PolygonViewModel _selectedPolygon;
@@ -43,16 +46,72 @@ namespace MMACRulesMining.Desktop.ViewModels
 			}
 		}
 
-		public ActionCommand MineCommand { get; private set; }
+		private double _minSupport;
+		public double MinSupport
+		{
+			get => _minSupport;
+			set
+			{
+				_minSupport = value;
+				OnPropertyChanged(nameof(MinSupport));
+			}
+		}
 
+		private double _minConfidence;
+		public double MinConfidence
+		{
+			get => _minConfidence;
+			set
+			{
+				_minConfidence = value;
+				OnPropertyChanged(nameof(MinConfidence));
+			}
+		}
+
+		public Location CenterPoint { get; set; } = new Location(0, 0);
+
+
+		private bool _isMining;
+		public bool IsMining
+		{
+			get => _isMining;
+			set
+			{
+				_isMining = value;
+				OnPropertyChanged(nameof(IsMining));
+
+			}
+		}
+
+		public bool CanMine 
+		{
+			get => SelectedPolygon != null && !SelectedPolygon.IsLoading
+					&& SelectedPolygon.Records != null
+					&& MinSupport > 0 && MinSupport <= 1
+					&& MinConfidence > 0 && MinConfidence <= 1
+					&& !IsMining;
+
+		}
+		#endregion
+
+		public ActionCommand MineCommand { get; private set; }
+		public ActionCommand RefreshCommand { get; private set; }
+
+		private MapTileLayer _mapLayer;
 		public MapTileLayer MapLayer
 		{
-			get => new MapTileLayer
+
+			get
 			{
-				TileSource = new TileSource { UriFormat = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" },
-				SourceName = "OpenStreetMap",
-				Description = "© [OpenStreetMap contributors](http://www.openstreetmap.org/copyright)"
-			};
+				if (_mapLayer == null)
+					_mapLayer = new MapTileLayer
+					{
+						TileSource = new TileSource { UriFormat = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" },
+						SourceName = "OpenStreetMap",
+						Description = "© [OpenStreetMap contributors](http://www.openstreetmap.org/copyright)"
+					};
+				return _mapLayer;
+			}
 		}
 
 		public MainViewModel()
@@ -60,131 +119,77 @@ namespace MMACRulesMining.Desktop.ViewModels
 			_fsHelper = new FSHelper();
 			_context = new GlonassContext();
 
+			_minSupport = 0.002;
+			_minConfidence = 0.01;
+
 			MineCommand = new ActionCommand(
 				c => MineRulesForPolygon(SelectedPolygon, "Dataset_Kazan_filtered"),
-				c => SelectedPolygon != null && !SelectedPolygon.IsLoading 
-					&& SelectedPolygon.Records != null
+				c => true
+			);
+
+			RefreshCommand = new ActionCommand(
+				c => LoadPolygons(),
+				c => true
 			);
 
 			PolygonViewModel.SetContext(_context);
 
 			Polygons = new ObservableCollection<PolygonViewModel>();
-			
-			foreach(PolygonViewModel polygon in PolygonsImporter.ImportDirectory(@"E:\Data\polygons"))
-			{
-				polygon.Clicked += OnPolygonSelected;
-				Polygons.Add(polygon);
-			}
-			OnPropertyChanged(nameof(Polygons));
+			LoadPolygons();
 
 			cc = ((ne.lat + sw.lat) / 2, (ne.lon + sw.lon) / 2);
 			CenterPoint.Latitude = (ne.lat + sw.lat) / 2;
 			CenterPoint.Longitude = (ne.lon + sw.lon) / 2;
 			OnPropertyChanged(nameof(CenterPoint));
-			OnPropertyChanged(nameof(Tiles));
-
-			//Tiles = LoadTiles(rulesPath);
-
-			//ActionSelectionViewModel.ShowActionSelection(_context);
-
-			//Dataset = _fsHelper.GetDataSet(@"E:\Data\cards_features.csv", ";");
-			//Tiles = PrepareTiles(ne, sw, 10);
-			//foreach (var tile in Tiles)
-			//{
-			//	MineRulesForTile(tile, Dataset);
-			//}
-			//foreach (var tile in Tiles)
-			//{
-			//	Polygons.Add(GetPolygonForTile(tile));
-			//}
 		}
 
-		public Location CenterPoint { get; set; } = new Location(0, 0);
-
-		public List<Tile> PrepareTiles((double lat, double lon) point1, (double lat, double lon) point2, int size)
+		public void LoadPolygons(string path = @"E:\Data\polygons")
 		{
-			List<Tile> output = new List<Tile>();
-			double top = Math.Max(point1.lat, point2.lat);
-			double left = Math.Min(point1.lon, point2.lon);
-
-			double latStep = (top - Math.Min(point1.lat, point2.lat)) / (double)size;
-			double lonStep = (Math.Max(point1.lon, point2.lon) - left) / (double)size;
-
-
-			for (int lat = 0; lat < size; lat++)
+			if (Polygons != null && Polygons.Count > 0)
 			{
-				for (int lon = 0; lon < size; lon++)
+				foreach (PolygonViewModel polygon in Polygons)
 				{
-					Tile tile = new Tile(top - (latStep * lat), top - (latStep * lat) - latStep, left + (lonStep * lon), left + (lonStep * lon) + lonStep)
-					{
-						GridLat = lat,
-						GridLon = lon
-					};
-					output.Add(tile);
+					polygon.Clicked -= OnPolygonSelected;
+					polygon.Dispose();
 				}
 			}
+			Polygons = new ObservableCollection<PolygonViewModel>();
 
-			return output;
-		}
-
-		public List<Tile> LoadTiles(string path)
-		{
-			if (System.IO.Directory.Exists(path))
+			foreach (PolygonViewModel polygon in PolygonsImporter.ImportDirectory(path))
 			{
-				var tiles = new List<Tile>();
-				var directory = new System.IO.DirectoryInfo(path);
-
-				foreach(var file in directory.GetFiles())
-				{
-					if (TryLoadTile(file, out Tile tile))
-						tiles.Add(tile);
-				}
-				return tiles;
+				polygon.Clicked += OnPolygonSelected;
+				Polygons.Add(polygon);
 			}
-			return null;
+			OnPropertyChanged(nameof(Polygons));
 		}
 
-		public bool TryLoadTile(System.IO.FileInfo fileInfo, out Tile tile)
-		{
-			tile = _fsHelper.LoadObject<Tile>(fileInfo.FullName);
-			if (tile != null)
-				return true;
-			return false;
-		}
-
-		public void MineRulesForTile(Tile tile, DataTable dataset)
-		{
-			var miner = new Miner();
-			var filtered = dataset.AsEnumerable().Where(x => double.Parse(x.Field<string>("latitude")) >= tile.Bottom
-														&& double.Parse(x.Field<string>("latitude")) <= tile.Top
-														&& double.Parse(x.Field<string>("longitude")) >= tile.Left
-														&& double.Parse(x.Field<string>("longitude")) <= tile.Right);
-			var testFiltered = filtered.AsEnumerable();
-			var geoTile = filtered.Any() ? filtered.CopyToDataTable() : dataset.Clone();
-
-			var rules = miner.MineRules(geoTile, @"E:\Data\attributes.csv", @"E:\Data\unused_consequents.csv",
-				@"E:\Data\results", 0.001, 0.01);
-
-			tile.TotalElements = filtered.Count();
-			tile.Rules = rules;
-			
-			_fsHelper.SaveObject<Tile>(tile, string.Format(@"E:\Data\results\tiles\rules\{0}x{1}_rules", tile.GridLon, tile.GridLat));
-			if (!System.IO.Directory.Exists(rulesPath + @"\text"))
-				System.IO.Directory.CreateDirectory(rulesPath + @"\text");
-			System.IO.File.WriteAllLines(string.Format(@"E:\Data\results\tiles\rules\text\{0}x{1}_rules.txt", tile.GridLon, tile.GridLat), rules.Select(x => x.ToString()));
-		}
 
 		public void MineRulesForPolygon(PolygonViewModel polygon, string tableName)
 		{
-			Miner miner = new Miner();
-			IEnumerable<Attribute> attributes = MapAttributes(polygon.Attributes
-				.Where(x => x.IsEligibleForMining));
+			var thread = new Thread(() =>
+			{
+				IsMining = true;
 
-			Rule[] rules = miner.MineRules(polygon.Records, attributes,
-				string.Format(@"E:\Data\results\{0}", polygon.Alias), 0.001, 0.01);
+				if (_miner == null)
+					_miner = new Miner();
 
-			System.IO.File.WriteAllLines(string.Format(@"E:\Data\results\{0}\{0}_rules.txt", polygon.Alias), rules.Select(x => x.ToString()));
-			
+				IEnumerable<Attribute> attributes = MapAttributes(polygon.Attributes
+					.Where(x => x.IsEligibleForMining && x.IsSelected));
+
+				Rule[] rules = _miner.MineRules(polygon.Records, attributes,
+					string.Format(@"E:\Data\results\{0}", polygon.Alias), 0.001, 0.01);
+
+				string fileName = string.Format(@"E:\Data\results\{0}\{1}_rules.txt", polygon.Alias, 
+					DateTime.Now.ToString("ddMMyyyyHHmmss"));
+				System.IO.File.WriteAllLines(fileName, rules.Select(x => x.ToString()));
+
+				if (System.IO.File.Exists(fileName))
+					Process.Start(new ProcessStartInfo(fileName) { UseShellExecute = true });
+
+				IsMining = false;
+			});
+			thread.Name = "Mining Thread";
+			thread.Start();
 		}
 
 		private IEnumerable<Attribute> MapAttributes(IEnumerable<AttributeViewModel> attributeVMs)
@@ -195,26 +200,6 @@ namespace MMACRulesMining.Desktop.ViewModels
 				attributes.Add(new Attribute(vm.AttributeName, vm.BadValue, attributes.Count, vm.IsConsequent));
 			}
 			return attributes;
-		}
-
-		PolygonViewModel GetPolygonForTile(Tile tile)
-		{
-			return new PolygonViewModel()
-			{
-				Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Blue),
-				Stroke = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Green),
-				StrokeThickness = 2,
-				Opacity = 0.7,
-				Locations = new ObservableCollection<MapControl.Location>()
-				{
-					new Location(tile.NE.lat, tile.NE.lon),
-					new Location(tile.SE.lat, tile.SE.lon),
-					new Location(tile.SW.lat, tile.SW.lon),
-					new Location(tile.NW.lat, tile.NW.lon)
-				}
-			};
-			
-			//NewPolygonLayer.Children.Add(polygon);
 		}
 
 		private void OnPolygonSelected(PolygonViewModel polygon)
@@ -228,76 +213,9 @@ namespace MMACRulesMining.Desktop.ViewModels
 					SelectedPolygon.DropSelection();
 				}
 				SelectedPolygon = polygon;
-				SelectedPolygon.LoadData();
+				SelectedPolygon.LoadData(preLoading: () => OnPropertyChanged(nameof(CanMine)),
+					postLoading: () => OnPropertyChanged(nameof(CanMine)));
 			}
-		}
-	}
-
-	[Serializable]
-	public class Tile
-	{
-		public Dictionary<string, int> AttributesCounts { get; set; } = new Dictionary<string, int>();
-		public Dictionary<int, int> RulesLengthsCounts { get; set; } = new Dictionary<int, int>();
-		public int TotalElements { get; set; }
-		public int TotalRules { get => Rules?.Length ?? 0; }
-
-		public int GridLat { get; set; }
-		public int GridLon { get; set; }
-
-		public double Top { get; set; }
-		public double Bottom { get; set; }
-		public double Left { get; set; }
-		public double Right { get; set; }
-
-		private Rule[] _rules;
-		public Rule[] Rules 
-		{ 
-			get => _rules;
-			set 
-			{
-				_rules = value;
-				CountLengths(value);
-			} 
-		}
-
-		public Tile(double north, double south, double west, double east)
-		{
-			this.Top = north;
-			this.Bottom = south;
-			this.Left = west;
-			this.Right = east;
-		}
-
-		public Tile(int totalElements, double top, double bottom, double left, double right)
-		{
-			TotalElements = totalElements;
-			Top = top;
-			Bottom = bottom;
-			Left = left;
-			Right = right;
-		}
-
-		public (double lat, double lon) SE => (Bottom, Right);
-		public (double lat, double lon) SW => (Bottom, Left);
-		public (double lat, double lon) NE => (Top, Right);
-		public (double lat, double lon) NW => (Top, Left);
-
-
-		private void CountLengths(Rule[] rules)
-		{
-			foreach(var rule in rules)
-			{
-				int count = rule.antecedent.Length + rule.consequent.Length;
-				if (RulesLengthsCounts.ContainsKey(count))
-					RulesLengthsCounts[count]++;
-				else
-					RulesLengthsCounts.Add(count, 1);
-			}
-		}
-
-		public override string ToString()
-		{
-			return string.Format("{0}x{1}", GridLat, GridLon);
 		}
 	}
 }

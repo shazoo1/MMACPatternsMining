@@ -5,10 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace MMACRulesMining.Desktop.ViewModels
 {
@@ -17,7 +20,9 @@ namespace MMACRulesMining.Desktop.ViewModels
 
 		private static GlonassContext _context;
 		public delegate void OnClicked(PolygonViewModel sender);
+
 		public event OnClicked Clicked;
+		public event EventHandler OnLoaded;
 
 		private Thread _dataLoadingThread;
 
@@ -25,6 +30,23 @@ namespace MMACRulesMining.Desktop.ViewModels
 		{
 			_locations = new ObservableCollection<Location>();
 			Attributes = new List<AttributeViewModel>();
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			if (!disposedValue)
+			{
+				if (disposing)
+				{
+					Records?.Dispose();
+					Records = null;
+				}
+
+				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+				// TODO: set large fields to null.
+
+				disposedValue = true;
+			}
 		}
 
 		#region Bindables
@@ -116,34 +138,37 @@ namespace MMACRulesMining.Desktop.ViewModels
 			{
 				_records = value;
 
-				Attributes = new List<AttributeViewModel>();
-
-				foreach(DataColumn col in _records.Columns)
+				if (value != null)
 				{
-					if (!Attributes.Any(x => x.AttributeName == col.ColumnName))
+					Attributes = new List<AttributeViewModel>();
+
+					foreach (DataColumn col in _records.Columns)
 					{
-						IEnumerable<string> possibleValues = _records.AsEnumerable()
-							.Select(x => x[col].ToString())
-							.Distinct();
-						
-						// If there are more than 10 distinct values in column, this column is more likely numeric.
-						bool isCategorical = possibleValues.Count() <= 10;
-						string badValue = "";
-
-						if (isCategorical)
+						if (!Attributes.Any(x => x.AttributeName == col.ColumnName))
 						{
-							badValue = possibleValues.Contains("False") ? "False" : possibleValues.FirstOrDefault();
+							IEnumerable<string> possibleValues = _records.AsEnumerable()
+								.Select(x => x[col].ToString())
+								.Distinct();
+
+							// If there are more than 10 distinct values in column, this column is more likely numeric.
+							bool isCategorical = possibleValues.Count() <= 10;
+							string badValue = "";
+
+							if (isCategorical)
+							{
+								badValue = possibleValues.Contains("False") ? "False" : possibleValues.FirstOrDefault();
+							}
+
+							Attributes.Add(new AttributeViewModel
+							{
+								AttributeName = col.ColumnName,
+								IsConsequent = false,
+								IsSelected = isCategorical,
+								PossibleValues = isCategorical ? possibleValues : null,
+								BadValue = badValue,
+								IsEligibleForMining = isCategorical
+							});
 						}
-
-						Attributes.Add(new AttributeViewModel
-						{
-							AttributeName = col.ColumnName,
-							IsConsequent = false,
-							IsSelected = isCategorical,
-							PossibleValues = isCategorical ? possibleValues : null,
-							BadValue = badValue,
-							IsEligibleForMining = isCategorical
-						});
 					}
 				}
 
@@ -198,7 +223,8 @@ namespace MMACRulesMining.Desktop.ViewModels
 				string sqlPol = @"polygon '(";
 				foreach(var location in Locations)
 				{
-					sqlPol += string.Format("({0}, {1}),", location.Longitude, location.Latitude);
+					sqlPol += string.Format(CultureInfo.InvariantCulture, "({0}, {1}),", 
+						location.Longitude, location.Latitude);
 				}
 				sqlPol = sqlPol.TrimEnd(',');
 				sqlPol += @")'";
@@ -206,22 +232,27 @@ namespace MMACRulesMining.Desktop.ViewModels
 			}
 		}
 
-		public void LoadData(string latColumn = "latitude", string lonColumn = "longitude") 
+		public void LoadData(string latColumn = "latitude", string lonColumn = "longitude", 
+			Action preLoading = null, Action postLoading = null) 
 		{
 			if (_context != null)
 			{
-				
-				_dataLoadingThread = new Thread(() =>
+				new Thread(() =>
 				{
 					IsLoading = true;
+					preLoading?.Invoke();
+
 					if (_context.SelectWithinPolygon(SqlPolygon, latColumn, lonColumn, out DataTable tab))
 					{
 						Records = tab;
 					}
-					IsLoading = false;
-				});
 
-				_dataLoadingThread.Start();
+					IsLoading = false;
+					postLoading?.Invoke();
+				})
+				{
+					Name = "Polygon Data Loading Thread"
+				}.Start();
 			}
 		}
 
